@@ -1,0 +1,396 @@
+openapi: 3.1.0
+info:
+  title: LandMark AI Platform API
+  version: 0.1.0
+  summary: Core APIs for Legacy Vault, Trust Score, Document AI, and orchestration.
+servers:
+  - url: https://api.landmarkai.example.com/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Health
+  - name: Vaults
+  - name: Documents
+  - name: TrustScores
+  - name: Workflows
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Service health check
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /vaults:
+    post:
+      tags: [Vaults]
+      summary: Create a legacy vault record
+      operationId: createVault
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVaultRequest"
+      responses:
+        "201":
+          description: Vault created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vault"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /vaults/{vaultId}:
+    get:
+      tags: [Vaults]
+      summary: Fetch a vault by ID
+      operationId: getVault
+      parameters:
+        - $ref: "#/components/parameters/VaultId"
+      responses:
+        "200":
+          description: Vault details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vault"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /documents:
+    post:
+      tags: [Documents]
+      summary: Register document upload metadata and enqueue processing
+      operationId: registerDocument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterDocumentRequest"
+      responses:
+        "202":
+          description: Accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AsyncJobAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /documents/{documentId}:
+    get:
+      tags: [Documents]
+      summary: Retrieve document extraction status and result
+      operationId: getDocument
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Document processing record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentRecord"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /trust-scores/{vaultId}:
+    post:
+      tags: [TrustScores]
+      summary: Trigger trust score recomputation
+      operationId: recomputeTrustScore
+      parameters:
+        - $ref: "#/components/parameters/VaultId"
+      responses:
+        "202":
+          description: Recompute accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AsyncJobAccepted"
+    get:
+      tags: [TrustScores]
+      summary: Get current trust score and explainability payload
+      operationId: getTrustScore
+      parameters:
+        - $ref: "#/components/parameters/VaultId"
+      responses:
+        "200":
+          description: Current trust score
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustScoreResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /workflows/{workflowId}:
+    get:
+      tags: [Workflows]
+      summary: Get orchestration workflow execution state
+      operationId: getWorkflowStatus
+      parameters:
+        - $ref: "#/components/parameters/WorkflowId"
+      responses:
+        "200":
+          description: Workflow state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowStatus"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    VaultId:
+      name: vaultId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    WorkflowId:
+      name: workflowId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service, version, time]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        service:
+          type: string
+        version:
+          type: string
+        time:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    CreateVaultRequest:
+      type: object
+      required: [owner, parcel, consent]
+      properties:
+        owner:
+          $ref: "#/components/schemas/OwnerRef"
+        parcel:
+          $ref: "#/components/schemas/ParcelRef"
+        consent:
+          $ref: "#/components/schemas/ConsentRecord"
+    Vault:
+      type: object
+      required: [id, owner, parcel, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        owner:
+          $ref: "#/components/schemas/OwnerRef"
+        parcel:
+          $ref: "#/components/schemas/ParcelRef"
+        status:
+          type: string
+          enum: [pending_review, active, restricted, archived]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    OwnerRef:
+      type: object
+      required: [fullName, hashedNationalId]
+      properties:
+        fullName:
+          type: string
+          minLength: 2
+        hashedNationalId:
+          type: string
+          description: SHA-256 hash of NIN/BVN, never raw identifier.
+        phoneE164:
+          type: string
+    ParcelRef:
+      type: object
+      required: [parcelCode, location]
+      properties:
+        parcelCode:
+          type: string
+        location:
+          type: object
+          required: [lat, lng]
+          properties:
+            lat:
+              type: number
+            lng:
+              type: number
+    ConsentRecord:
+      type: object
+      required: [version, grantedAt, channel]
+      properties:
+        version:
+          type: string
+        grantedAt:
+          type: string
+          format: date-time
+        channel:
+          type: string
+          enum: [web, mobile, agent]
+    RegisterDocumentRequest:
+      type: object
+      required: [vaultId, type, storageKey]
+      properties:
+        vaultId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [title_deed, survey_plan, tax_receipt, id_document, other]
+        storageKey:
+          type: string
+          description: S3 key with encrypted object.
+    DocumentRecord:
+      type: object
+      required: [id, vaultId, status, confidence, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        vaultId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, processing, needs_review, verified, failed]
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        extraction:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+    AsyncJobAccepted:
+      type: object
+      required: [jobId, status, acceptedAt]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [accepted]
+        acceptedAt:
+          type: string
+          format: date-time
+    TrustScoreResponse:
+      type: object
+      required: [vaultId, score, band, computedAt, factors]
+      properties:
+        vaultId:
+          type: string
+          format: uuid
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        band:
+          type: string
+          enum: [critical, high_risk, medium, good, excellent]
+        computedAt:
+          type: string
+          format: date-time
+        factors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScoreFactor"
+    ScoreFactor:
+      type: object
+      required: [name, contribution, reason]
+      properties:
+        name:
+          type: string
+        contribution:
+          type: number
+        reason:
+          type: string
+    WorkflowStatus:
+      type: object
+      required: [workflowId, state, steps, updatedAt]
+      properties:
+        workflowId:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [queued, running, blocked, completed, failed]
+        steps:
+          type: array
+          items:
+            type: object
+            required: [agent, status]
+            properties:
+              agent:
+                type: string
+                enum: [document, title, risk, spatial, scoring]
+              status:
+                type: string
+                enum: [pending, running, succeeded, failed, skipped]
+              notes:
+                type: string
+        updatedAt:
+          type: string
+          format: date-time

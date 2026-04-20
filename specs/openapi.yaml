@@ -1,8 +1,11 @@
 openapi: 3.1.0
 info:
   title: LandMark AI Platform API
-  version: 0.1.0
+  version: 0.2.0
   summary: Core APIs for Legacy Vault, Trust Score, Document AI, and orchestration.
+  x-landmark-lifecycle: beta
+  x-landmark-owner: platform-api
+  x-landmark-data-classification: internal
 servers:
   - url: https://api.landmarkai.example.com/v1
 security:
@@ -20,6 +23,7 @@ paths:
       summary: Service health check
       operationId: getHealth
       security: []
+      x-landmark-slo-tier: tier0
       responses:
         "200":
           description: Healthy
@@ -32,6 +36,8 @@ paths:
       tags: [Vaults]
       summary: Create a legacy vault record
       operationId: createVault
+      x-landmark-idempotent: true
+      x-landmark-breaking-change-policy: additive-only
       requestBody:
         required: true
         content:
@@ -54,6 +60,7 @@ paths:
       tags: [Vaults]
       summary: Fetch a vault by ID
       operationId: getVault
+      x-landmark-consent-required: true
       parameters:
         - $ref: "#/components/parameters/VaultId"
       responses:
@@ -70,6 +77,7 @@ paths:
       tags: [Documents]
       summary: Register document upload metadata and enqueue processing
       operationId: registerDocument
+      x-landmark-idempotent: true
       requestBody:
         required: true
         content:
@@ -106,6 +114,7 @@ paths:
       tags: [TrustScores]
       summary: Trigger trust score recomputation
       operationId: recomputeTrustScore
+      x-landmark-audit-event: trust_score.recompute.requested
       parameters:
         - $ref: "#/components/parameters/VaultId"
       responses:
@@ -130,22 +139,6 @@ paths:
                 $ref: "#/components/schemas/TrustScoreResponse"
         "404":
           $ref: "#/components/responses/NotFound"
-  /workflows/{workflowId}:
-    get:
-      tags: [Workflows]
-      summary: Get orchestration workflow execution state
-      operationId: getWorkflowStatus
-      parameters:
-        - $ref: "#/components/parameters/WorkflowId"
-      responses:
-        "200":
-          description: Workflow state
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WorkflowStatus"
-        "404":
-          $ref: "#/components/responses/NotFound"
 components:
   securitySchemes:
     bearerAuth:
@@ -162,13 +155,6 @@ components:
         format: uuid
     DocumentId:
       name: documentId
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-    WorkflowId:
-      name: workflowId
       in: path
       required: true
       schema:
@@ -252,57 +238,57 @@ components:
     OwnerRef:
       type: object
       required: [fullName, hashedNationalId]
+      x-landmark-data-classification: pii
       properties:
         fullName:
           type: string
           minLength: 2
         hashedNationalId:
           type: string
-          description: SHA-256 hash of NIN/BVN, never raw identifier.
-        phoneE164:
-          type: string
     ParcelRef:
       type: object
-      required: [parcelCode, location]
+      required: [parcelId, region]
       properties:
-        parcelCode:
+        parcelId:
           type: string
-        location:
-          type: object
-          required: [lat, lng]
-          properties:
-            lat:
-              type: number
-            lng:
-              type: number
+        region:
+          type: string
     ConsentRecord:
       type: object
-      required: [version, grantedAt, channel]
+      required: [grantedBy, grantedAt, policyVersion]
       properties:
-        version:
+        grantedBy:
           type: string
         grantedAt:
           type: string
           format: date-time
-        channel:
+        policyVersion:
           type: string
-          enum: [web, mobile, agent]
     RegisterDocumentRequest:
       type: object
-      required: [vaultId, type, storageKey]
+      required: [vaultId, documentType, objectKey]
       properties:
         vaultId:
           type: string
           format: uuid
-        type:
+        documentType:
           type: string
-          enum: [title_deed, survey_plan, tax_receipt, id_document, other]
-        storageKey:
+          enum: [title_deed, survey_plan, tax_receipt, id_card, utility_bill]
+        objectKey:
           type: string
-          description: S3 key with encrypted object.
+    AsyncJobAccepted:
+      type: object
+      required: [jobId, status]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued]
     DocumentRecord:
       type: object
-      required: [id, vaultId, status, confidence, createdAt]
+      required: [id, vaultId, status, createdAt]
       properties:
         id:
           type: string
@@ -312,33 +298,19 @@ components:
           format: uuid
         status:
           type: string
-          enum: [queued, processing, needs_review, verified, failed]
-        confidence:
-          type: number
-          minimum: 0
-          maximum: 1
-        extraction:
+          enum: [queued, processing, needs_review, complete, failed]
+        extractedFields:
           type: object
           additionalProperties: true
         createdAt:
           type: string
           format: date-time
-    AsyncJobAccepted:
-      type: object
-      required: [jobId, status, acceptedAt]
-      properties:
-        jobId:
-          type: string
-          format: uuid
-        status:
-          type: string
-          enum: [accepted]
-        acceptedAt:
+        updatedAt:
           type: string
           format: date-time
     TrustScoreResponse:
       type: object
-      required: [vaultId, score, band, computedAt, factors]
+      required: [vaultId, score, confidence, band, factors, updatedAt]
       properties:
         vaultId:
           type: string
@@ -347,49 +319,27 @@ components:
           type: integer
           minimum: 0
           maximum: 100
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
         band:
           type: string
-          enum: [critical, high_risk, medium, good, excellent]
-        computedAt:
-          type: string
-          format: date-time
+          enum: [low, medium, high]
         factors:
           type: array
           items:
-            $ref: "#/components/schemas/ScoreFactor"
-    ScoreFactor:
-      type: object
-      required: [name, contribution, reason]
-      properties:
-        name:
-          type: string
-        contribution:
-          type: number
-        reason:
-          type: string
-    WorkflowStatus:
-      type: object
-      required: [workflowId, state, steps, updatedAt]
-      properties:
-        workflowId:
-          type: string
-          format: uuid
-        state:
-          type: string
-          enum: [queued, running, blocked, completed, failed]
-        steps:
-          type: array
-          items:
             type: object
-            required: [agent, status]
+            required: [name, impact]
             properties:
-              agent:
+              name:
                 type: string
-                enum: [document, title, risk, spatial, scoring]
-              status:
+              impact:
                 type: string
-                enum: [pending, running, succeeded, failed, skipped]
-              notes:
+                enum: [positive, neutral, negative]
+              weight:
+                type: number
+              explanation:
                 type: string
         updatedAt:
           type: string

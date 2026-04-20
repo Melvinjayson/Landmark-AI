@@ -2,14 +2,37 @@
 
 Production-ready monorepo foundation for the LandMark AI / Venus AI ecosystem.
 
-## Generated architecture artifacts
+## Why this repository exists
 
-- Repository structure and service boundaries: `docs/architecture/repository-structure.md`
-- API contract specification (OpenAPI 3.1): `specs/openapi.yaml`
-- Frontend design system guide: `docs/frontend/design-system.md`
-- 2–4 week MVP Codex execution workflow: `docs/workflows/codex-mvp-2-4-weeks.md`
+Landmark-AI is a contract-first platform for digitizing land/property verification workflows with explainable trust scoring. The repository is optimized for:
 
-## Monorepo layout (implemented scaffold)
+- **Regulated delivery**: clear consent trails, auditable events, and security policy docs.
+- **Parallel execution**: backend, frontend, and platform teams can ship independently against shared contracts.
+- **Risk-managed scale-up**: ADRs, CI quality gates, and operational runbooks are part of the baseline.
+
+## Quickstart
+
+```bash
+# 1) Read the architecture + contracts
+open docs/README.md
+
+# 2) Validate API contract quality (when spectral is installed)
+spectral lint specs/openapi.yaml
+
+# 3) Inspect ADR decisions before making cross-cutting changes
+ls docs/adr
+```
+
+## Documentation index
+
+- Central docs index: `docs/README.md`
+- Architecture boundaries: `docs/architecture/repository-structure.md`
+- Security and governance: `docs/security/`
+- Architecture Decision Records (ADRs): `docs/adr/`
+- Frontend design system baseline: `docs/frontend/design-system.md`
+- Delivery workflow guide: `docs/workflows/codex-mvp-2-4-weeks.md`
+
+## Monorepo layout (scaffold)
 
 ```text
 apps/
@@ -30,6 +53,14 @@ infra/
 docs/
   architecture/
   frontend/
+  security/
   workflows/
+  adr/
 specs/
 ```
+
+## Contract-first governance
+
+- `specs/openapi.yaml` is the source of truth for API compatibility.
+- Breaking changes must be accompanied by migration notes and client impact analysis.
+- Extensions under `x-landmark-*` encode lifecycle, ownership, and data classification metadata used by quality gates.

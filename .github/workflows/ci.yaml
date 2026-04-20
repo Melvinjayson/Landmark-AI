@@ -1,0 +1,28 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [work, main]
+
+jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install fastapi pydantic uvicorn pytest httpx pyyaml
+
+      - name: Contract breaking-change check
+        run: python scripts/check_openapi_breaking.py
+
+      - name: Run e2e harness
+        run: pytest tests/e2e -q
